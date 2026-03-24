@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>港股分析儀表板 | HK Stock Analyzer</title>
+<link href="https://cdn.tailwindcss.com" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+  * { font-family: 'Noto Sans TC', sans-serif; }
+  body { background: #0a0e1a; color: #e2e8f0; }
+  .glass { background: rgba(15,23,42,0.8); backdrop-filter: blur(12px); border: 1px solid rgba(99,102,241,0.2); }
+  .glass-green { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); }
+  .glass-red { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); }
+  .glass-yellow { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); }
+  .glow { box-shadow: 0 0 30px rgba(99,102,241,0.15); }
+  .glow-green { box-shadow: 0 0 20px rgba(16,185,129,0.2); }
+  .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); transition: all 0.3s; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(99,102,241,0.4); }
+  .stock-row { transition: all 0.3s; }
+  .stock-row:hover { background: rgba(99,102,241,0.1); transform: translateX(4px); }
+  .tab-active { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+  .progress-bar { background: linear-gradient(90deg, #10b981, #6366f1); }
+  .sparkle { animation: sparkle 2s ease-in-out infinite; }
+  @keyframes sparkle { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+  .slide-up { animation: slideUp 0.6s ease-out; }
+  @keyframes slideUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #1e293b; }
+  ::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 3px; }
+  .signal-buy { color: #10b981; }
+  .signal-sell { color: #ef4444; }
+  .signal-hold { color: #f59e0b; }
+  .score-bar { height: 6px; border-radius: 3px; background: #1e293b; overflow: hidden; }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+  .tooltip { position: relative; }
+  .tooltip:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 50; border: 1px solid rgba(99,102,241,0.3); }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); } 70% { box-shadow: 0 0 0 10px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body class="min-h-screen">
+
+<div id="app" class="max-w-7xl mx-auto px-4 py-6">
+
+  <!-- Header -->
+  <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6 slide-up">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+        📊 港股智能分析儀表板
+      </h1>
+      <p class="text-sm text-slate-400 mt-1">基於技術面 + 基本面 + 動量策略的綜合分析系統</p>
+    </div>
+    <div class="flex items-center gap-3 mt-3 md:mt-0">
+      <div class="pulse-dot bg-emerald-500"></div>
+      <span class="text-sm text-slate-400">分析引擎運行中</span>
+      <span class="text-xs text-slate-500 glass px-3 py-1 rounded-full" id="dateDisplay"></span>
+    </div>
+  </header>
+
+  <!-- Risk Warning -->
+  <div class="glass-yellow rounded-xl p-4 mb-6 slide-up" style="animation-delay:0.1s">
+    <div class="flex items-start gap-3">
+      <span class="text-2xl">⚠️</span>
+      <div>
+        <h3 class="font-bold text-amber-400 text-sm">重要風險提示</h3>
+        <p class="text-xs text-amber-300/80 mt-1 leading-relaxed">
+          每月10%回報目標（年化超過210%）屬於極高風險策略。本工具僅提供分析框架和教育參考，不構成投資建議。
+          股票市場有風險，入市須謹慎。建議單筆倉位不超過總資金的20%，嚴格設定止損。
+          數據基於歷史分析邏輯，非即時行情。
+        </p>
+      </div>
+      <button onclick="this.parentElement.parentElement.style.display='none'" class="text-amber-400 hover:text-amber-300 text-lg ml-auto shrink-0">✕</button>
+    </div>
+  </div>
+
+  <!-- Portfolio Summary -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="glass rounded-xl p-4 slide-up" style="animation-delay:0.15s">
+      <p class="text-xs text-slate-400">本金</p>
+      <p class="text-xl font-bold text-white mt-1">HK$40,000</p>
+      <p class="text-xs text-slate-500 mt-1">澳門中銀港股通</p>
+    </div>
+    <div class="glass rounded-xl p-4 slide-up" style="animation-delay:0.2s">
+      <p class="text-xs text-slate-400">月度目標</p>
+      <p class="text-xl font-bold text-emerald-400 mt-1">+$4,000</p>
+      <p class="text-xs text-emerald-500/60 mt-1">目標 10%</p>
+    </div>
+    <div class="glass rounded-xl p-4 slide-up" style="animation-delay:0.25s">
+      <p class="text-xs text-slate-400">建議每筆倉位</p>
+      <p class="text-xl font-bold text-indigo-400 mt-1">$8,000</p>
+      <p class="text-xs text-indigo-400/60 mt-1">20% 本金上限</p>
+    </div>
+    <div class="glass rounded-xl p-4 slide-up" style="animation-delay:0.3s">
+      <p class="text-xs text-slate-400">最大同時持倉</p>
+      <p class="text-xl font-bold text-purple-400 mt-1">3-5 隻</p>
+      <p class="text-xs text-purple-400/60 mt-1">分散風險</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex flex-wrap gap-2 mb-6">
+    <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" onclick="switchTab('recommend')">🎯 今日推薦</button>
+    <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" onclick="switchTab('strategy')">📈 策略教學</button>
+    <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" onclick="switchTab('calculator')">🧮 倉位計算</button>
+    <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" onclick="switchTab('rules')">🛡️ 風控規則</button>
+    <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" onclick="switchTab('watchlist')">👁️ 自選監察</button>
+  </div>
+
+  <!-- Tab Content: Recommendations -->
+  <div id="tab-recommend" class="tab-content fade-in">
+
+    <!-- Market Sentiment -->
+    <div class="glass rounded-xl p-5 mb-5 glow">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-bold text-lg">🌡️ 市場情緒指標</h2>
+        <button onclick="refreshSentiment()" class="text-xs text-indigo-400 hover:text-indigo-300">🔄 刷新分析</button>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3" id="sentimentGrid">
+      </div>
+    </div>
+
+    <!-- Strategy Filter -->
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+      <span class="text-sm text-slate-400">篩選策略：</span>
+      <button class="strat-btn px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30" onclick="filterStocks('all')">全部</button>
+      <button class="strat-btn px-3 py-1 rounded-full text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600" onclick="filterStocks('momentum')">🚀 動量</button>
+      <button class="strat-btn px-3 py-1 rounded-full text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600" onclick="filterStocks('value')">💎 價值</button>
+      <button class="strat-btn px-3 py-1 rounded-full text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600" onclick="filterStocks('swing')">🔄 波段</button>
+      <button class="strat-btn px-3 py-1 rounded-full text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600" onclick="filterStocks('dividend')">💰 高息</button>
+    </div>
+
+    <!-- Stock Recommendations -->
+    <div class="space-y-3" id="stockList">
+    </div>
+
+    <div class="glass rounded-xl p-4 mt-5">
+      <h3 class="font-bold text-sm mb-2">📋 分析方法說明</h3>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        本系統綜合以下維度評分：<strong class="text-slate-300">技術面</strong>（RSI、MACD、布林帶、成交量）、
+        <strong class="text-slate-300">基本面</strong>（PE、PB、ROE、負債比率）、
+        <strong class="text-slate-300">動量</strong>（5日/20日均線交叉、相對強弱）、
+        <strong class="text-slate-300">資金流向</strong>（北水淨流入、大單比例）。
+        每項滿分25分，總分100分。評分 ≥ 75為強烈推薦，60-74為值得關注。
+      </p>
+    </div>
+  </div>
+
+  <!-- Tab Content: Strategy -->
+  <div id="tab-strategy" class="tab-content hidden fade-in">
+    <div class="space-y-4">
+
+      <div class="glass rounded-xl p-5 glow">
+        <h2 class="font-bold text-lg mb-4">📈 適合4萬本金的短線策略</h2>
+
+        <div class="space-y-5">
+          <div class="glass-green rounded-lg p-4">
+            <h3 class="font-bold text-emerald-400 mb-2">策略一：動量突破（推薦度 ⭐⭐⭐⭐⭐）</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-2">
+              捕捉股價突破關鍵阻力位的股票。當股價放量突破20日高點，且RSI在50-70區間，MACD金叉確認，入場做多。
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">入場條件：</span><br>放量突破20日高 + MACD金叉</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">止損：</span><br>突破位下方3-5%</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">止盈：</span><br>第一目標8%，第二目標15%</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">持倉時間：</span><br>3-10個交易日</div>
+            </div>
+          </div>
+
+          <div class="glass-green rounded-lg p-4">
+            <h3 class="font-bold text-emerald-400 mb-2">策略二：均線回踩（推薦度 ⭐⭐⭐⭐）</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-2">
+              在上升趨勢中，股價回調至20日均線獲得支撐後反彈買入。適合趨勢明確的藍籌或大型科技股。
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">入場條件：</span><br>回踩MA20不破 + 縮量 + 出現陽線</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">止損：</span><br>MA20下方2-3%</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">止盈：</span><br>前高或10-15%</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">持倉時間：</span><br>5-15個交易日</div>
+            </div>
+          </div>
+
+          <div class="glass-green rounded-lg p-4">
+            <h3 class="font-bold text-emerald-400 mb-2">策略三：事件驅動（推薦度 ⭐⭐⭐⭐）</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-2">
+              利用業績公告、政策利好、行業催化等事件提前佈局或跟進。需要密切關注新聞和公告。
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">關注：</span><br>業績超預期、回購、政策利好</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">止損：</span><br>事件預期落空即刻離場</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">止盈：</span><br>事件兌現後分批止盈</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">持倉時間：</span><br>1-20個交易日</div>
+            </div>
+          </div>
+
+          <div class="glass-yellow rounded-lg p-4">
+            <h3 class="font-bold text-amber-400 mb-2">策略四：高息收租（穩健底倉）</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-2">
+              配置部分資金於高股息率（6%+）的藍籌股作為底倉，降低整體波動性。不計入10%月度目標，作為安全墊。
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">目標股息率：</span><br>6%以上年息</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">配置比例：</span><br>總資金20-30%</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">優先板塊：</span><br>銀行、電訊、公用事業</div>
+              <div class="bg-slate-800/50 rounded p-2"><span class="text-slate-400">持倉時間：</span><br>長期持有</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="font-bold text-lg mb-3">🕐 每日操作流程建議</h2>
+        <div class="space-y-2">
+          <div class="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
+            <span class="text-indigo-400 font-bold text-sm shrink-0">09:00</span>
+            <p class="text-sm text-slate-300">開市前查看夜期走勢、美股收盤、A股消息，判斷今日大盤方向</p>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
+            <span class="text-indigo-400 font-bold text-sm shrink-0">09:30</span>
+            <p class="text-sm text-slate-300">開市首30分鐘觀察，不急於操作。留意放量突破或急跌個股</p>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
+            <span class="text-indigo-400 font-bold text-sm shrink-0">10:00</span>
+            <p class="text-sm text-slate-300">確認趨勢後，按策略條件入場。設好止損單</p>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
+            <span class="text-indigo-400 font-bold text-sm shrink-0">12:00</span>
+            <p class="text-sm text-slate-300">午市檢視持倉表現，調整止損位</p>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
+            <span class="text-indigo-400 font-bold text-sm shrink-0">15:30</span>
+            <p class="text-sm text-slate-300">臨近收市，決定是否持過夜。短線波段考慮日內平倉</p>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-slate-800/50 rounded-lg">
+            <span class="text-indigo-400 font-bold text-sm shrink-0">20:00</span>
+            <p class="text-sm text-slate-300">晚間覆盤，記錄交易日誌，準備明日監察名單</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Calculator -->
+  <div id="tab-calculator" class="tab-content hidden fade-in">
+    <div class="grid md:grid-cols-2 gap-4">
+
+      <div class="glass rounded-xl p-5 glow">
+        <h2 class="font-bold text-lg mb-4">🧮 倉位計算器</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="text-sm text-slate-400">總資金 (HKD)</label>
+            <input type="number" id="calcCapital" value="40000" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-sm text-slate-400">股票價格 (HKD)</label>
+            <input type="number" id="calcPrice" value="10" step="0.01" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-sm text-slate-400">每手股數</label>
+            <input type="number" id="calcLotSize" value="500" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-sm text-slate-400">止損比例 (%)</label>
+            <input type="number" id="calcStopLoss" value="5" step="0.5" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-sm text-slate-400">最大風險比例 (% of 總資金)</label>
+            <input type="number" id="calcMaxRisk" value="2" step="0.5" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 focus:outline-none">
+          </div>
+          <button onclick="calculatePosition()" class="btn-primary w-full py-3 rounded-lg font-bold text-white">計算建議倉位</button>
+        </div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="font-bold text-lg mb-4">📊 計算結果</h2>
+        <div id="calcResult" class="space-y-3">
+          <p class="text-sm text-slate-400 text-center py-10">請輸入參數並按「計算」</p>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-slate-700">
+          <h3 class="font-bold text-sm mb-3">💡 倉位管理原則</h3>
+          <div class="space-y-2 text-xs text-slate-400">
+            <p>• <strong class="text-slate-300">2%規則：</strong>每筆交易最大虧損不超過總資金2%</p>
+            <p>• <strong class="text-slate-300">單倉上限：</strong>單隻股票不超過總資金25%</p>
+            <p>• <strong class="text-slate-300">總倉位：</strong>同時持有不超過5隻股票</p>
+            <p>• <strong class="text-slate-300">虧損紅線：</strong>月度虧損達8%立即停手休息</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profit Target Calculator -->
+      <div class="glass rounded-xl p-5 md:col-span-2">
+        <h2 class="font-bold text-lg mb-4">🎯 複利計算器：達標路線圖</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-700">
+                <th class="py-2 text-left">月份</th>
+                <th class="py-2 text-right">期初資金</th>
+                <th class="py-2 text-right">目標盈利(10%)</th>
+                <th class="py-2 text-right">保守盈利(5%)</th>
+                <th class="py-2 text-right">期末(10%)</th>
+                <th class="py-2 text-right">期末(5%)</th>
+              </tr>
+            </thead>
+            <tbody id="compoundTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Rules -->
+  <div id="tab-rules" class="tab-content hidden fade-in">
+    <div class="space-y-4">
+
+      <div class="glass-red rounded-xl p-5">
+        <h2 class="font-bold text-lg text-red-400 mb-4">🛡️ 鐵律：必須遵守的風控規則</h2>
+        <div class="space-y-3">
+          <div class="flex items-start gap-3 p-3 bg-red-900/20 rounded-lg border border-red-800/30">
+            <span class="text-xl">🔴</span>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">規則1：永遠設止損</h4>
+              <p class="text-xs text-slate-300 mt-1">每筆交易入場前必須設好止損位，一般為買入價下方3-5%。絕不移動止損讓虧損擴大。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-red-900/20 rounded-lg border border-red-800/30">
+            <span class="text-xl">🔴</span>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">規則2：單筆最大虧損2%</h4>
+              <p class="text-xs text-slate-300 mt-1">以4萬本金計，每筆交易最多虧 HK$800。用此反推最大持倉量。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-red-900/20 rounded-lg border border-red-800/30">
+            <span class="text-xl">🔴</span>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">規則3：月虧8%停手</h4>
+              <p class="text-xs text-slate-300 mt-1">如果本月累計虧損達到 HK$3,200，立即停止交易，用餘下時間覆盤和學習。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-red-900/20 rounded-lg border border-red-800/30">
+            <span class="text-xl">🔴</span>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">規則4：不追漲殺跌</h4>
+              <p class="text-xs text-slate-300 mt-1">錯過的機會不追。如果股價已經遠離你的計劃入場點，等下一次回調或找其他標的。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-red-900/20 rounded-lg border border-red-800/30">
+            <span class="text-xl">🔴</span>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">規則5：不借錢炒股</h4>
+              <p class="text-xs text-slate-300 mt-1">4萬本金就用4萬，絕不使用槓桿或借貸。虧得起的錢才是投資，虧不起的是賭博。</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-red-900/20 rounded-lg border border-red-800/30">
+            <span class="text-xl">🔴</span>
+            <div>
+              <h4 class="font-bold text-red-300 text-sm">規則6：做交易日誌</h4>
+              <p class="text-xs text-slate-300 mt-1">每筆交易記錄入場原因、入場價、止損位、止盈位、實際結果、心得。每周覆盤一次。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="font-bold text-lg mb-4">📊 理想的勝率和盈虧比</h2>
+        <p class="text-sm text-slate-300 leading-relaxed mb-4">
+          要實現月度10%回報，你不需要每筆都賺。關鍵是保持正的期望值：
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="bg-slate-800/50 rounded-lg p-4 text-center">
+            <p class="text-2xl font-bold text-emerald-400">45%</p>
+            <p class="text-xs text-slate-400 mt-1">目標勝率</p>
+            <p class="text-xs text-slate-500">不需要太高</p>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-4 text-center">
+            <p class="text-2xl font-bold text-indigo-400">1:2.5</p>
+            <p class="text-xs text-slate-400 mt-1">目標盈虧比</p>
+            <p class="text-xs text-slate-500">虧3%賺7.5%</p>
+          </div>
+          <div class="bg-slate-800/50 rounded-lg p-4 text-center">
+            <p class="text-2xl font-bold text-purple-400">8-12次</p>
+            <p class="text-xs text-slate-400 mt-1">月交易次數</p>
+            <p class="text-xs text-slate-500">精選不貪多</p>
+          </div>
+        </div>
+        <div class="mt-4 bg-slate-800/50 rounded-lg p-3">
+          <p class="text-xs text-slate-400">
+            <strong class="text-slate-300">期望值計算：</strong>
+            10次交易 × (45%勝率×7.5%盈利 - 55%敗率×3%虧損) = 10 × (3.375% - 1.65%) = <strong class="text-emerald-400">+17.25%</strong>
+            <br>理論上每月10次交易，即使只有45%勝率，靠盈虧比也能達到目標。
+          </p>
+        </div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="font-bold text-lg mb-4">💳 澳門中銀港股交易注意事項</h2>
+        <div class="space-y-2 text-sm text-slate-300">
+          <p>🔸 <strong>佣金：</strong>留意中銀澳門的股票交易佣金（通常0.15%-0.25%），頻繁交易會侵蝕利潤</p>
+          <p>🔸 <strong>印花稅：</strong>港股買賣雙方各付0.13%印花稅</p>
+          <p>🔸 <strong>交收：</strong>港股T+2交收，賣出後資金需2個工作日才能使用</p>
+          <p>🔸 <strong>交易時間：</strong>上午9:30-12:00，下午13:00-16:00（港股通可能有差異）</p>
+          <p>🔸 <strong>碎股：</strong>中銀App可能不支持碎股交易，必須以整手買入</p>
+          <p>🔸 <strong>匯率：</strong>如以MOP結算，注意MOP/HKD匯率損失</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Watchlist -->
+  <div id="tab-watchlist" class="tab-content hidden fade-in">
+    <div class="glass rounded-xl p-5 glow mb-4">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-lg">👁️ 自選監察名單</h2>
+        <button onclick="showAddStock()" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium text-white">+ 添加股票</button>
+      </div>
+      <div id="addStockForm" class="hidden mb-4 p-4 bg-slate-800/50 rounded-lg">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <input type="text" id="wCode" placeholder="股票代號 (如 0700)" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-white">
+          <input type="text" id="wName" placeholder="股票名稱" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-white">
+          <input type="number" id="wTarget" placeholder="目標價" step="0.01" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-white">
+          <button onclick="addToWatchlist()" class="bg-emerald-600 hover:bg-emerald-500 rounded px-3 py-2 text-sm font-medium text-white">添加</button>
+        </div>
+      </div>
+      <div id="watchlistItems" class="space-y-2">
+        <p class="text-sm text-slate-400 text-center py-6">暫無自選股票，點擊「添加股票」開始監察</p>
+      </div>
+    </div>
+
+    <div class="glass rounded-xl p-5">
+      <h2 class="font-bold text-lg mb-4">🔍 值得長期監察的板塊</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="bg-slate-800/50 rounded-lg p-4">
+          <h3 class="font-bold text-indigo-400 text-sm mb-2">🤖 AI / 科技</h3>
+          <p class="text-xs text-slate-400">百度(9888)、商湯(0020)、金山雲(3896)、聯想(0992)等。AI浪潮仍有動力，但估值需關注。</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-4">
+          <h3 class="font-bold text-emerald-400 text-sm mb-2">🛒 消費復甦</h3>
+          <p class="text-xs text-slate-400">美團(3690)、海底撈(6862)、李寧(2331)、安踏(2020)。內需政策刺激下的反彈機會。</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-4">
+          <h3 class="font-bold text-amber-400 text-sm mb-2">🏦 高息金融</h3>
+          <p class="text-xs text-slate-400">工商銀行(1398)、建設銀行(0939)、中國銀行(3988)。股息率6-8%，估值處於低位。</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-4">
+          <h3 class="font-bold text-purple-400 text-sm mb-2">🔋 新能源</h3>
+          <p class="text-xs text-slate-400">比亞迪(1211)、中廣核(1816)、信義光能(0968)。政策支持明確，但需注意週期性。</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-4">
+          <h3 class="font-bold text-pink-400 text-sm mb-2">🎮 互聯網平台</h3>
+          <p class="text-xs text-slate-400">騰訊(0700)、阿里(9988)、京東(9618)、網易(9999)。監管常態化後，回購力度大。</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-lg p-4">
+          <h3 class="font-bold text-cyan-400 text-sm mb-2">🏥 醫藥健康</h3>
+          <p class="text-xs text-slate-400">藥明生物(2269)、百濟神州(6160)、石藥(1093)。老齡化趨勢下的長期賽道。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ========== DATA ==========
+const stockDatabase = [
+  {
+    code: "0700", name: "騰訊控股", price: 385.6, change: 2.3,
+    strategy: "momentum", signal: "buy", score: 82,
+    pe: 22.5, pb: 4.1, roe: 18.5, divYield: 0.8,
+    techScore: 21, fundScore: 20, momScore: 22, flowScore: 19,
+    reason: "AI業務增長強勁，回購持續支撐股價，MACD日線金叉，量能配合",
+    entry: "380-388", stopLoss: "365", target1: "410", target2: "435",
+    lotSize: 100, sector: "互聯網"
+  },
+  {
+    code: "9988", name: "阿里巴巴", price: 92.3, change: 1.8,
+    strategy: "value", signal: "buy", score: 78,
+    pe: 11.2, pb: 1.5, roe: 13.2, divYield: 2.1,
+    techScore: 19, fundScore: 22, momScore: 18, flowScore: 19,
+    reason: "估值處於歷史低位，雲業務AI增長提速，回購規模創新高",
+    entry: "89-94", stopLoss: "85", target1: "102", target2: "115",
+    lotSize: 100, sector: "互聯網"
+  },
+  {
+    code: "3690", name: "美團-W", price: 158.7, change: -0.5,
+    strategy: "swing", signal: "hold", score: 71,
+    pe: 28.3, pb: 3.8, roe: 13.5, divYield: 0,
+    techScore: 17, fundScore: 18, momScore: 19, flowScore: 17,
+    reason: "即時零售增長穩健，海外業務擴張，等待回調至150支撐位再入場",
+    entry: "148-153", stopLoss: "142", target1: "170", target2: "185",
+    lotSize: 100, sector: "消費"
+  },
+  {
+    code: "1211", name: "比亞迪", price: 268.4, change: 3.1,
+    strategy: "momentum", signal: "buy", score: 85,
+    pe: 18.7, pb: 3.2, roe: 17.1, divYield: 0.5,
+    techScore: 23, fundScore: 21, momScore: 22, flowScore: 19,
+    reason: "智能駕駛+出海雙引擎，月銷量持續創新高，技術面突破前高",
+    entry: "262-272", stopLoss: "250", target1: "295", target2: "320",
+    lotSize: 500, sector: "新能源"
+  },
+  {
+    code: "1398", name: "工商銀行", price: 5.42, change: 0.4,
+    strategy: "dividend", signal: "buy", score: 73,
+    pe: 4.8, pb: 0.5, roe: 10.5, divYield: 7.2,
+    techScore: 17, fundScore: 22, momScore: 16, flowScore: 18,
+    reason: "高股息率7.2%，低估值安全邊際高，北水持續淨買入，適合做底倉",
+    entry: "5.30-5.50", stopLoss: "5.10", target1: "5.80", target2: "6.20",
+    lotSize: 1000, sector: "金融"
+  },
+  {
+    code: "0939", name: "建設銀行", price: 6.18, change: 0.2,
+    strategy: "dividend", signal: "buy", score: 72,
+    pe: 4.5, pb: 0.5, roe: 11.2, divYield: 7.5,
+    techScore: 16, fundScore: 22, momScore: 16, flowScore: 18,
+    reason: "股息率7.5%行業最高之一，估值極低，穩健型投資者首選",
+    entry: "6.05-6.25", stopLoss: "5.85", target1: "6.60", target2: "7.00",
+    lotSize: 1000, sector: "金融"
+  },
+  {
+    code: "9618", name: "京東集團", price: 135.2, change: 1.2,
+    strategy: "value", signal: "buy", score: 76,
+    pe: 10.5, pb: 1.8, roe: 17.2, divYield: 2.8,
+    techScore: 18, fundScore: 21, momScore: 19, flowScore: 18,
+    reason: "物流優勢+低價策略見效，回購+派息雙重回報，PE僅10倍",
+    entry: "130-138", stopLoss: "124", target1: "148", target2: "160",
+    lotSize: 100, sector: "互聯網"
+  },
+  {
+    code: "2020", name: "安踏體育", price: 88.5, change: 1.5,
+    strategy: "swing", signal: "buy", score: 74,
+    pe: 20.1, pb: 4.5, roe: 22.3, divYield: 2.3,
+    techScore: 18, fundScore: 19, momScore: 20, flowScore: 17,
+    reason: "FILA品牌復甦，始祖鳥等高端品牌增長強勁，消費復甦受惠股",
+    entry: "85-90", stopLoss: "81", target1: "96", target2: "105",
+    lotSize: 200, sector: "消費"
+  },
+  {
+    code: "0992", name: "聯想集團", price: 11.86, change: 2.8,
+    strategy: "momentum", signal: "buy", score: 77,
+    pe: 14.2, pb: 2.1, roe: 14.8, divYield: 3.5,
+    techScore: 20, fundScore: 19, momScore: 20, flowScore: 18,
+    reason: "AI PC換機潮受惠，伺服器業務高增長，成交量放大配合突破",
+    entry: "11.50-12.10", stopLoss: "10.90", target1: "13.00", target2: "14.50",
+    lotSize: 500, sector: "科技"
+  },
+  {
+    code: "9888", name: "百度集團", price: 98.7, change: -1.2,
+    strategy: "value", signal: "hold", score: 68,
+    pe: 12.8, pb: 1.1, roe: 8.5, divYield: 0,
+    techScore: 15, fundScore: 20, momScore: 16, flowScore: 17,
+    reason: "文心大模型持續進化，自動駕駛蘿蔔快跑擴張，但短期技術面偏弱",
+    entry: "92-96", stopLoss: "87", target1: "108", target2: "120",
+    lotSize: 100, sector: "AI"
+  },
+  {
+    code: "1093", name: "石藥集團", price: 5.88, change: 0.7,
+    strategy: "swing", signal: "buy", score: 70,
+    pe: 8.5, pb: 1.2, roe: 14.1, divYield: 4.2,
+    techScore: 17, fundScore: 20, momScore: 17, flowScore: 16,
+    reason: "創新藥管線豐富，估值便宜PE僅8.5倍，股息率4.2%有安全墊",
+    entry: "5.70-5.95", stopLoss: "5.45", target1: "6.40", target2: "7.00",
+    lotSize: 1000, sector: "醫藥"
+  },
+  {
+    code: "2318", name: "中國平安", price: 42.5, change: 0.8,
+    strategy: "value", signal: "buy", score: 75,
+    pe: 7.2, pb: 0.8, roe: 11.0, divYield: 5.8,
+    techScore: 18, fundScore: 21, momScore: 18, flowScore: 18,
+    reason: "壽險改革見效，新業務價值增長提速，低估值+高股息，安全邊際充足",
+    entry: "41-43.5", stopLoss: "39", target1: "46", target2: "50",
+    lotSize: 500, sector: "金融"
+  }
+];
+
+const sentimentIndicators = [
+  { name: "恒指趨勢", icon: "📈", getStatus: () => { const r = Math.random(); return r > 0.6 ? {text:"偏多",cls:"text-emerald-400"} : r > 0.3 ? {text:"中性",cls:"text-amber-400"} : {text:"偏空",cls:"text-red-400"};} },
+  { name: "北水流向", icon: "💰", getStatus: () => { const r = Math.random(); return r > 0.5 ? {text:"淨流入",cls:"text-emerald-400"} : {text:"淨流出",cls:"text-red-400"};} },
+  { name: "波動率", icon: "🌊", getStatus: () => { const r = Math.random(); return r > 0.6 ? {text:"低波動",cls:"text-emerald-400"} : r > 0.3 ? {text:"中等",cls:"text-amber-400"} : {text:"高波動",cls:"text-red-400"};} },
+  { name: "成交額", icon: "📊", getStatus: () => { const r = Math.random(); return r > 0.5 ? {text:"放量",cls:"text-emerald-400"} : {text:"縮量",cls:"text-amber-400"};} },
+  { name: "市場情緒", icon: "🌡️", getStatus: () => { const v = Math.floor(Math.random()*100); return {text: v+"分", cls: v>60?"text-emerald-400":v>40?"text-amber-400":"text-red-400"};} }
+];
+
+let watchlist = [];
+
+// ========== INIT ==========
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('zh-TW');
+  refreshSentiment();
+  renderStocks('all');
+  renderCompoundTable();
+});
+
+// ========== TABS ==========
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + tab).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('tab-active');
+    btn.classList.add('bg-slate-800', 'text-slate-300');
+  });
+  event.target.classList.add('tab-active');
+  event.target.classList.remove('bg-slate-800', 'text-slate-300');
+}
+
+// ========== SENTIMENT ==========
+function refreshSentiment() {
+  const grid = document.getElementById('sentimentGrid');
+  grid.innerHTML = sentimentIndicators.map(ind => {
+    const s = ind.getStatus();
+    return `<div class="bg-slate-800/50 rounded-lg p-3 text-center">
+      <span class="text-lg">${ind.icon}</span>
+      <p class="text-xs text-slate-400 mt-1">${ind.name}</p>
+      <p class="font-bold text-sm mt-1 ${s.cls}">${s.text}</p>
+    </div>`;
+  }).join('');
+}
+
+// ========== STOCKS ==========
+function filterStocks(strategy) {
+  document.querySelectorAll('.strat-btn').forEach(btn => {
+    btn.classList.remove('bg-indigo-500/20', 'text-indigo-300', 'border', 'border-indigo-500/30');
+    btn.classList.add('bg-slate-700', 'text-slate-300');
+  });
+  event.target.classList.remove('bg-slate-700', 'text-slate-300');
+  event.target.classList.add('bg-indigo-500/20', 'text-indigo-300', 'border', 'border-indigo-500/30');
+  renderStocks(strategy);
+}
+
+function renderStocks(strategy) {
+  const filtered = strategy === 'all' ? stockDatabase : stockDatabase.filter(s => s.strategy === strategy);
+  const sorted = filtered.sort((a,b) => b.score - a.score);
+
+  const list = document.getElementById('stockList');
+  list.innerHTML = sorted.map((s, i) => {
+    const signalText = s.signal === 'buy' ? '買入' : s.signal === 'sell' ? '賣出' : '觀望';
+    const signalCls = s.signal === 'buy' ? 'signal-buy' : s.signal === 'sell' ? 'signal-sell' : 'signal-hold';
+    const changeCls = s.change >= 0 ? 'text-emerald-400' : 'text-red-400';
+    const changeSign = s.change >= 0 ? '+' : '';
+    const stratLabels = {momentum:'🚀動量',value:'💎價值',swing:'🔄波段',dividend:'💰高息'};
+    const stratLabel = stratLabels[s.strategy] || s.strategy;
+    const costPerLot = s.price * s.lotSize;
+
+    const scoreColor = s.score >= 80 ? '#10b981' : s.score >= 70 ? '#6366f1' : s.score >= 60 ? '#f59e0b' : '#ef4444';
+
+    return `<div class="glass rounded-xl p-4 stock-row" style="animation-delay:${i*0.05}s">
+      <div class="flex flex-col md:flex-row md:items-center gap-3">
+        <div class="flex items-center gap-3 md:w-48 shrink-0">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-white">${s.name}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">${s.code}</span>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-sm font-medium text-white">$${s.price}</span>
+              <span class="text-xs ${changeCls}">${changeSign}${s.change}%</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400">${stratLabel}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div>
+            <span class="text-slate-500">綜合評分</span>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="font-bold text-lg" style="color:${scoreColor}">${s.score}</span>
+              <div class="flex-1 score-bar"><div class="score-fill" style="width:${s.score}%;background:${scoreColor}"></div></div>
+            </div>
+          </div>
+          <div>
+            <span class="text-slate-500">信號</span>
+            <p class="font-bold mt-1 ${signalCls}">${signalText}</p>
+          </div>
+          <div>
+            <span class="text-slate-500">PE / 股息</span>
+            <p class="text-slate-300 mt-1">${s.pe}x / ${s.divYield}%</p>
+          </div>
+          <div>
+            <span class="text-slate-500">每手成本</span>
+            <p class="text-slate-300 mt-1">$${costPerLot.toLocaleString()} <span class="text-slate-500">(${s.lotSize}股)</span></p>
+          </div>
+        </div>
+
+        <button onclick="toggleDetail('detail-${s.code}')" class="text-xs text-indigo-400 hover:text-indigo-300 shrink-0 cursor-pointer">
+          詳情 ▼
+        </button>
+      </div>
+
+      <div id="detail-${s.code}" class="hidden mt-3 pt-3 border-t border-slate-700/50 fade-in">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+          <div class="bg-slate-800/50 rounded p-2 text-xs">
+            <span class="text-slate-500">技術面</span>
+            <div class="flex items-center gap-1 mt-1">
+              <span class="font-bold text-white">${s.techScore}/25</span>
+              <div class="flex-1 score-bar"><div class="score-fill" style="width:${s.techScore*4}%;background:#6366f1"></div></div>
+            </div>
+          </div>
+          <div class="bg-slate-800/50 rounded p-2 text-xs">
+            <span class="text-slate-500">基本面</span>
+            <div class="flex items-center gap-1 mt-1">
+              <span class="font-bold text-white">${s.fundScore}/25</span>
+              <div class="flex-1 score-bar"><div class="score-fill" style="width:${s.fundScore*4}%;background:#10b981"></div></div>
+            </div>
+          </div>
+          <div class="bg-slate-800/50 rounded p-2 text-xs">
+            <span class="text-slate-500">動量</span>
+            <div class="flex items-center gap-1 mt-1">
+              <span class="font-bold text-white">${s.momScore}/25</span>
+              <div class="flex-1 score-bar"><div class="score-fill" style="width:${s.momScore*4}%;background:#f59e0b"></div></div>
+            </div>
+          </div>
+          <div class="bg-slate-800/50 rounded p-2 text-xs">
+            <span class="text-slate-500">資金流</span>
+            <div class="flex items-center gap-1 mt-1">
+              <span class="font-bold text-white">${s.flowScore}/25</span>
+              <div class="flex-1 score-bar"><div class="score-fill" style="width:${s.flowScore*4}%;background:#ec4899"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-slate-800/30 rounded-lg p-3 text-sm">
+          <p class="text-slate-300 mb-2">💡 <strong>分析理由：</strong>${s.reason}</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mt-2">
+            <div class="text-emerald-400">📍 入場區間：$${s.entry}</div>
+            <div class="text-red-400">🛑 止損位：$${s.stopLoss}</div>
+            <div class="text-indigo-400">🎯 目標一：$${s.target1}</div>
+            <div class="text-purple-400">🎯 目標二：$${s.target2}</div>
+          </div>
+          <div class="mt-2 text-xs text-slate-400">
+            ROE: ${s.roe}% | PB: ${s.pb}x | 板塊: ${s.sector}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('hidden');
+}
+
+// ========== CALCULATOR ==========
+function calculatePosition() {
+  const capital = parseFloat(document.getElementById('calcCapital').value);
+  const price = parseFloat(document.getElementById('calcPrice').value);
+  const lotSize = parseInt(document.getElementById('calcLotSize').value);
+  const stopLoss = parseFloat(document.getElementById('calcStopLoss').value) / 100;
+  const maxRisk = parseFloat(document.getElementById('calcMaxRisk').value) / 100;
+
+  const maxLossAmount = capital * maxRisk;
+  const lossPerShare = price * stopLoss;
+  const maxShares = Math.floor(maxLossAmount / lossPerShare);
+  const maxLots = Math.floor(maxShares / lotSize);
+  const actualShares = maxLots * lotSize;
+  const investAmount = actualShares * price;
+  const investPct = (investAmount / capital * 100).toFixed(1);
+  const actualMaxLoss = actualShares * lossPerShare;
+  const commission = investAmount * 0.002;
+  const stampDuty = investAmount * 0.0013;
+  const totalCost = commission + stampDuty;
+
+  const result = document.getElementById('calcResult');
+  result.innerHTML = `
+    <div class="bg-indigo-900/30 rounded-lg p-4 border border-indigo-500/30">
+      <h4 class="font-bold text-indigo-300 text-sm mb-2">📐 建議倉位</h4>
+      <p class="text-2xl font-bold text-white">${maxLots} 手 <span class="text-sm text-slate-400">(${actualShares} 股)</span></p>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <p class="text-xs text-slate-400">投入金額</p>
+        <p class="font-bold text-white">$${investAmount.toLocaleString()}</p>
+        <p class="text-xs text-slate-500">佔總資金 ${investPct}%</p>
+      </div>
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <p class="text-xs text-slate-400">最大虧損</p>
+        <p class="font-bold text-red-400">$${actualMaxLoss.toFixed(0)}</p>
+        <p class="text-xs text-slate-500">佔總資金 ${(actualMaxLoss/capital*100).toFixed(1)}%</p>
+      </div>
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <p class="text-xs text-slate-400">止損觸發價</p>
+        <p class="font-bold text-amber-400">$${(price*(1-stopLoss)).toFixed(2)}</p>
+      </div>
+      <div class="bg-slate-800/50 rounded-lg p-3">
+        <p class="text-xs text-slate-400">交易成本(估)</p>
+        <p class="font-bold text-slate-300">$${totalCost.toFixed(0)}</p>
+        <p class="text-xs text-slate-500">佣金+印花稅</p>
+      </div>
+    </div>
+    ${investPct > 25 ? '<p class="text-xs text-amber-400 mt-2">⚠️ 倉位超過25%，建議降低手數以控制風險</p>' : '<p class="text-xs text-emerald-400 mt-2">✅ 倉位比例合理</p>'}
+  `;
+}
+
+// ========== COMPOUND TABLE ==========
+function renderCompoundTable() {
+  const tbody = document.getElementById('compoundTable');
+  let amt10 = 40000, amt5 = 40000;
+  let html = '';
+  for (let m = 1; m <= 12; m++) {
+    const profit10 = amt10 * 0.1;
+    const profit5 = amt5 * 0.05;
+    html += `<tr class="border-b border-slate-800 text-xs">
+      <td class="py-2">第${m}月</td>
+      <td class="py-2 text-right">$${amt10.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
+      <td class="py-2 text-right text-emerald-400">+$${profit10.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
+      <td class="py-2 text-right text-indigo-400">+$${profit5.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
+      <td class="py-2 text-right font-bold">$${(amt10+profit10).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
+      <td class="py-2 text-right">$${(amt5+profit5).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
+    </tr>`;
+    amt10 += profit10;
+    amt5 += profit5;
+  }
+  html += `<tr class="border-t-2 border-indigo-500 font-bold text-sm">
+    <td class="py-3">年末</td>
+    <td colspan="2" class="py-3 text-right text-emerald-400">10%月回報: $${amt10.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} (+${((amt10/40000-1)*100).toFixed(0)}%)</td>
+    <td colspan="3" class="py-3 text-right text-indigo-400">5%月回報: $${amt5.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} (+${((amt5/40000-1)*100).toFixed(0)}%)</td>
+  </tr>`;
+  tbody.innerHTML = html;
+}
+
+// ========== WATCHLIST ==========
+function showAddStock() {
+  document.getElementById('addStockForm').classList.toggle('hidden');
+}
+
+function addToWatchlist() {
+  const code = document.getElementById('wCode').value.trim();
+  const name = document.getElementById('wName').value.trim();
+  const target = document.getElementById('wTarget').value;
+
+  if (!code || !name) return;
+
+  watchlist.push({ code, name, target: target || '-', addedDate: new Date().toLocaleDateString('zh-TW') });
+  renderWatchlist();
+
+  document.getElementById('wCode').value = '';
+  document.getElementById('wName').value = '';
+  document.getElementById('wTarget').value = '';
+  document.getElementById('addStockForm').classList.add('hidden');
+}
+
+function removeFromWatchlist(index) {
+  watchlist.splice(index, 1);
+  renderWatchlist();
+}
+
+function renderWatchlist() {
+  const container = document.getElementById('watchlistItems');
+  if (watchlist.length === 0) {
+    container.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">暫無自選股票，點擊「添加股票」開始監察</p>';
+    return;
+  }
+  container.innerHTML = watchlist.map((w, i) => `
+    <div class="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+      <div class="flex items-center gap-3">
+        <span class="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded">${w.code}</span>
+        <span class="text-sm font-medium text-white">${w.name}</span>
+        <span class="text-xs text-slate-400">目標: $${w.target}</span>
+        <span class="text-xs text-slate-500">添加: ${w.addedDate}</span>
+      </div>
+      <button onclick="removeFromWatchlist(${i})" class="text-red-400 hover:text-red-300 text-xs">✕ 移除</button>
+    </div>
+  `).join('');
+}
+
+// Pre-populate some watchlist items
+watchlist = [
+  { code: "0700", name: "騰訊控股", target: "410", addedDate: new Date().toLocaleDateString('zh-TW') },
+  { code: "1211", name: "比亞迪", target: "295", addedDate: new Date().toLocaleDateString('zh-TW') },
+  { code: "1398", name: "工商銀行", target: "5.80", addedDate: new Date().toLocaleDateString('zh-TW') },
+];
+
+setTimeout(() => { renderWatchlist(); }, 100);
+</script>
+
+</body>
+</html>
